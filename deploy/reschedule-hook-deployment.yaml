@@ -1,0 +1,72 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reschedule-hook-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reschedule-hook-server
+  template:
+    metadata:
+      labels:
+        app: reschedule-hook-server
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: reschedule-hook-sa
+      containers:
+        - name: reschedule-hook-server
+          image: couchbase/couchbase-reschedule-hook:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8443
+              name: webhook-api
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: reschedule-hook-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reschedule-hook-server
+spec:
+  selector:
+    app: reschedule-hook-server
+  ports:
+    - port: 443
+      targetPort: webhook-api
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reschedule-hook-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: reschedule-hook-cr
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: reschedule-hook-crb
+subjects:
+- kind: ServiceAccount
+  name: reschedule-hook-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: reschedule-hook-cr
+  apiGroup: rbac.authorization.k8s.io
