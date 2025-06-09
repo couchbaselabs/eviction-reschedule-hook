@@ -20,19 +20,22 @@ var podResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource
 var CouchbaseClusterResource = schema.GroupVersionResource{Group: "couchbase.com", Version: "v2", Resource: "couchbaseclusters"}
 
 const (
-	RescheduleHookPodsListAnnotation = "reschedule.hook/rescheduledPods"
-	RescheduleTrue                   = "true"
-	RescheduleAnnotation             = "cao.couchbase.com/reschedule"
-	CouchbaseClusterLabelKey         = "couchbase_cluster"
-	InPlaceUpgradeStrategyKey        = "upgradeProcess"
-	InPlaceUpgradeStrategyValue      = "InPlaceUpgrade"
+	RescheduleHookPodsListAnnotation       = "reschedule.hook/rescheduledPod"
+	RescheduleHookTrackingAnnotationPrefix = "reschedule.hook/"
+	RescheduleTrue                         = "true"
+	RescheduleAnnotation                   = "cao.couchbase.com/reschedule"
+	CouchbaseClusterLabelKey               = "couchbase_cluster"
+	InPlaceUpgradeStrategyKey              = "upgradeProcess"
+	InPlaceUpgradeStrategyValue            = "InPlaceUpgrade"
 )
 
 type Client interface {
-	GetPod(namespace, name string) (*corev1.Pod, error)
+	GetPod(name, namespace string) (*corev1.Pod, error)
 	GetClusterInfo(name, namespace string) (*ClusterInfo, error)
 	ReschedulePod(pod *corev1.Pod) error
 	PatchRescheduleHookPodsList(name, namespace string, list []string) error
+	AddRescheduleHookTrackingAnnotation(podName, clusterName, clusterNamespace string) error
+	RemoveRescheduleHookTrackingAnnotation(podName, clusterName, clusterNamespace string) error
 }
 
 type ClientImpl struct {
@@ -40,6 +43,7 @@ type ClientImpl struct {
 }
 
 type ClusterInfo struct {
+	clusterAnnotations     map[string]string
 	rescheduleHookPodsList []string
 	inPlaceUpgrade         bool
 }
@@ -82,13 +86,29 @@ func (c *ClientImpl) GetClusterInfo(name, namespace string) (*ClusterInfo, error
 	}
 
 	upgradeStrategy, found, err := unstructured.NestedString(cluster.Object, "spec", InPlaceUpgradeStrategyKey)
+	if err != nil || !found {
+		return nil, fmt.Errorf("error reading cluster upgrade strategy: %w", err)
+	}
 
+	return &ClusterInfo{
+		clusterAnnotations: cluster.GetAnnotations(),
+		inPlaceUpgrade:     upgradeStrategy == InPlaceUpgradeStrategyValue,
+	}, nil
+}
+
+func (c *ClientImpl) GetClusterInfoList(name, namespace string) (*ClusterInfo, error) {
+	cluster, err := c.dynamicClient.Resource(CouchbaseClusterResource).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	upgradeStrategy, found, err := unstructured.NestedString(cluster.Object, "spec", InPlaceUpgradeStrategyKey)
 	if err != nil || !found {
 		return nil, fmt.Errorf("error reading cluster upgrade strategy: %w", err)
 	}
 
 	rescheduleJsonString, exists := cluster.GetAnnotations()[RescheduleHookPodsListAnnotation]
-	if !exists {
+	if !exists || rescheduleJsonString == "" {
 		rescheduleJsonString = "[]"
 	}
 
@@ -98,14 +118,23 @@ func (c *ClientImpl) GetClusterInfo(name, namespace string) (*ClusterInfo, error
 	}
 
 	return &ClusterInfo{
+		clusterAnnotations:     cluster.GetAnnotations(),
 		rescheduleHookPodsList: list,
 		inPlaceUpgrade:         upgradeStrategy == InPlaceUpgradeStrategyValue,
 	}, nil
 }
 
-func (c *ClientImpl) PatchRescheduleHookPodsList(name, namespace string, list []string) error {
+func (c *ClientImpl) AddRescheduleHookTrackingAnnotation(podName, clusterName, clusterNamespace string) error {
+	return c.addResourceAnnotation(clusterName, clusterNamespace, RescheduleHookTrackingAnnotationPrefix+podName, RescheduleTrue, CouchbaseClusterResource)
+}
+
+func (c *ClientImpl) RemoveRescheduleHookTrackingAnnotation(podName, clusterName, clusterNamespace string) error {
+	return c.removeResourceAnnotation(clusterName, clusterNamespace, RescheduleHookTrackingAnnotationPrefix+podName, CouchbaseClusterResource)
+}
+
+func (c *ClientImpl) PatchRescheduleHookPodsList(clusterName, clusterNamespace string, list []string) error {
 	if len(list) == 0 {
-		return c.removeResourceAnnotation(name, namespace, RescheduleHookPodsListAnnotation, CouchbaseClusterResource)
+		return c.removeResourceAnnotation(clusterName, clusterNamespace, RescheduleHookPodsListAnnotation, CouchbaseClusterResource)
 	}
 
 	jsonBytes, err := json.Marshal(list)
@@ -115,7 +144,7 @@ func (c *ClientImpl) PatchRescheduleHookPodsList(name, namespace string, list []
 
 	jsonString := string(jsonBytes)
 
-	return c.addResourceAnnotation(name, namespace, RescheduleHookPodsListAnnotation, jsonString, CouchbaseClusterResource)
+	return c.addResourceAnnotation(clusterName, clusterNamespace, RescheduleHookPodsListAnnotation, jsonString, CouchbaseClusterResource)
 }
 
 func (c *ClientImpl) ReschedulePod(pod *corev1.Pod) error {
@@ -138,7 +167,6 @@ func (c *ClientImpl) addResourceAnnotation(name, namespace string, annotation st
 
 	_, err = c.dynamicClient.Resource(resourceType).Namespace(namespace).Patch(context.TODO(), name, types.MergePatchType, payload, metav1.PatchOptions{})
 	return err
-
 }
 
 func (c *ClientImpl) removeResourceAnnotation(name, namespace string, annotation string, resourceType schema.GroupVersionResource) error {

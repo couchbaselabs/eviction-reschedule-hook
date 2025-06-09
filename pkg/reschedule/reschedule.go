@@ -67,7 +67,7 @@ func Serve() {
 	}
 
 	go func() {
-		slog.Info("Starting reschedule hook server")
+		slog.Info("Reschedule hook server started")
 		if err := server.ListenAndServeTLS("", ""); !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Server failed to start", "error", err)
 		}
@@ -173,7 +173,7 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 		"pod", eviction.Name,
 		"namespace", eviction.Namespace)
 
-	pod, err := client.GetPod(eviction.Namespace, eviction.Name)
+	pod, err := client.GetPod(eviction.Name, eviction.Namespace)
 	// If the pod doesn't exist, we can assume that it has already been recreated with a different name since the drain request
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -205,7 +205,12 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 	if TrackRescheduledPods {
 		clusterName := pod.Labels[CouchbaseClusterLabelKey]
 
-		response := handlePreviouslyRescheduledPodsList(pod.Name, clusterName, eviction.Namespace, client, true)
+		// response := handlePreviouslyRescheduledPodsList(pod.Name, clusterName, eviction.Namespace, client, true)
+		// if response != nil {
+		// 	return response
+		// }
+
+		response := handleTrackRescheduledPods(pod.Name, clusterName, eviction.Namespace, client)
 		if response != nil {
 			return response
 		}
@@ -224,6 +229,45 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 	return denyEviction(http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, "Reschedule annotation added to pod")
 }
 
+// handleTrackRescheduledPods handles situations where a pod may have been rescheduled with the same name. This method will
+// check for the existence of a tracking annotation on the couchbase cluster resource for the pod. If at this point
+// a tracking annotation already exists for the pod, it must have already been rescheduled with the same name.
+// We can therefore remove the tracking annotation and allow the eviction to proceed.
+// If the cluster is using InPlaceUpgrade, we will also add the pod to the reschedule hook pods list.
+func handleTrackRescheduledPods(podName, clusterName, clusterNamespace string, client Client) *admissionv1.AdmissionResponse {
+	clusterInfo, err := client.GetClusterInfo(clusterName, clusterNamespace)
+	if err != nil {
+		slog.Error("error fetching required cluster info", "error", err)
+		return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, "Failed to get required cluster info")
+	}
+
+	// If a tracking annotation already exists for the pod, it must have already been rescheduled as we should not
+	// get to this point if it has not. We can therefore remove the tracking annotation and allow the eviction to proceed.
+	if val, exists := clusterInfo.clusterAnnotations[RescheduleHookTrackingAnnotationPrefix+podName]; exists && val == RescheduleTrue {
+		slog.Info("Pod has been rescheduled, removing tracking annotation if needed", "pod", podName, "namespace", clusterNamespace)
+
+		err = client.RemoveRescheduleHookTrackingAnnotation(podName, clusterName, clusterNamespace)
+		if err != nil {
+			slog.Error("Failed to remove tracking annotation", "error", err)
+			return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, "Failed to remove tracking annotation")
+		}
+
+		return allowEviction()
+	}
+
+	if clusterInfo.inPlaceUpgrade {
+		slog.Info("Pod will be rescheduled with the same name, adding tracking annotation to cluster", "pod", podName, "namespace", clusterNamespace)
+
+		err = client.AddRescheduleHookTrackingAnnotation(podName, clusterName, clusterNamespace)
+		if err != nil {
+			slog.Error("Failed to add tracking annotation", "error", err)
+			return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, "Failed to add tracking annotation")
+		}
+	}
+
+	return nil
+}
+
 // handlePreviouslyRescheduledPodsList handles situations where a pod may have been rescheduled with the same name. This method will
 // check an annotation on the couchbase cluster resource for a list of pods that have been rescheduled.
 // When calling this method, we know that the pod does not have the reschedule annotation. Therefore, if it is present in the list,
@@ -237,7 +281,8 @@ func handlePreviouslyRescheduledPodsList(pod, cluster, namespace string, client 
 	}
 
 	if slices.Contains(clusterInfo.rescheduleHookPodsList, pod) {
-		slog.Info("Pod has already been rescheduled, removing from tracking list if needed", "pod", pod, "namespace", namespace)
+		slog.Info("Pod has been rescheduled, removing from tracking list if needed", "pod", pod, "namespace", namespace)
+
 		err = client.PatchRescheduleHookPodsList(cluster, namespace, slices.DeleteFunc(clusterInfo.rescheduleHookPodsList, func(s string) bool {
 			return s == pod
 		}))
@@ -251,8 +296,9 @@ func handlePreviouslyRescheduledPodsList(pod, cluster, namespace string, client 
 	}
 
 	if shouldUpdateList {
-		err = client.PatchRescheduleHookPodsList(cluster, namespace, append(clusterInfo.rescheduleHookPodsList, pod))
+		slog.Info("Pod will be rescdheduled, adding to tracking list", "pod", pod, "namespace", namespace)
 
+		err = client.PatchRescheduleHookPodsList(cluster, namespace, append(clusterInfo.rescheduleHookPodsList, pod))
 		if err != nil {
 			slog.Error("Failed to update tracking list", "error", err)
 			return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, "Failed to update rescheduled pods tracking list")
