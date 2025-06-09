@@ -18,8 +18,8 @@ spec:
       serviceAccountName: reschedule-hook-sa
       containers:
         - name: reschedule-hook-server
-          image: couchbase/couchbase-reschedule-hook:latest
-          imagePullPolicy: IfNotPresent
+          image: 
+          imagePullPolicy: Always
           ports:
             - containerPort: 8443
               name: webhook-api
@@ -54,9 +54,20 @@ kind: ClusterRole
 metadata:
   name: reschedule-hook-cr
 rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "update"]
+- apiGroups:
+    - ""
+  resources: 
+    - "pods"
+  verbs:
+    - "get"
+    - "patch"
+- apiGroups: 
+    - "couchbase.com"
+  resources: 
+    - "couchbaseclusters"
+  verbs: 
+    - "get"
+    - "patch"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
