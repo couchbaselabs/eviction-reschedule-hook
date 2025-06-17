@@ -22,13 +22,11 @@ docker-build: ## Build docker image
 	docker build -t ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG} -f docker/Dockerfile .
 
 .PHONY: kind-image
-kind-image: ## Build and load docker image into kind
-	docker-build
-	kind load docker-image --name $(KIND_CLUSTER_NAME) ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG} 
+kind-image: docker-build ## Build and load docker image into kind
+	kind load docker-image --name $(KIND_CLUSTER_NAME) ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
 
 .PHONY: public-image
-public-image: ## Push docker image to docker hub
-	docker-build
+public-image: docker-build ## Push docker image to docker hub
 	docker push ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
 
 .PHONY: images-clean
