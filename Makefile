@@ -10,7 +10,7 @@ GOOS := linux
 GOARCH := amd64
 
 .PHONY: lint
-lint:
+lint: ## Run linting
 	golangci-lint run ./pkg/... ./cmd/... ./test/...
 
 .PHONY: build
@@ -23,7 +23,7 @@ docker-build: ## Build docker image
 
 .PHONY: kind-image
 kind-image: docker-build ## Build and load docker image into kind
-	kind load docker-image --name $(KIND_CLUSTER_NAME) ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG} 
+	kind load docker-image --name $(KIND_CLUSTER_NAME) ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
 
 .PHONY: public-image
 public-image: docker-build ## Push docker image to docker hub
@@ -33,8 +33,9 @@ public-image: docker-build ## Push docker image to docker hub
 images-clean: ## Remove docker image
 	docker rmi -f ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
 
-.PHONY: test ## Run both unit and e2e tests
-test: test-unit test-e2e
+.PHONY: test
+test: ## Run both unit and e2e tests
+	test-unit test-e2e
 
 .PHONY: test-unit
 test-unit: ## Run all unit tests
