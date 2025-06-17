@@ -66,7 +66,6 @@ openssl x509 -req -in certs/server.csr \
     -days 365 \
     -extensions v3_ext \
     -extfile certs/signing.conf
-    -startdate $(date -u +%Y%m%d%H%M%SZ)
 
 # Verify the certificate to check SANs are present
 openssl x509 -in certs/server.crt -text -noout
@@ -81,8 +80,13 @@ kubectl create secret tls reschedule-hook-tls \
 
 # Get the CA certificate in base64 format for the webhook configuration
 CA_BUNDLE=$(cat certs/ca.crt | base64 | tr -d '\n')
-echo "CA Bundle for webhook configuration:"
-echo $CA_BUNDLE
 
-# Clean up the certs directory
+echo "Loading CA bundle into webhook configuration"
+# Update the webhook configuration with the CA bundle
+sed -i.bak "s/caBundle: \"\"/caBundle: \"${CA_BUNDLE}\"/" deploy/validating-webhook-config.yaml
+rm -f deploy/validating-webhook-config.yaml.bak
+
+echo "Updated webhook configuration with new CA bundle"
+
+# Clean up the certs directory
 rm -rf certs
