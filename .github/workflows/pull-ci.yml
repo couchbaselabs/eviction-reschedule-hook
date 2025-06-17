@@ -1,13 +1,16 @@
 name: "Run e2e tests"
-on: [pull_request, push]
+on: 
+  pull_request:
+    branches:
+      - master
 
 jobs:
-  # The e2e workflow expects docker, kubectl, and go to be installed
   e2e-tests:
     name: Run e2e tests
     runs-on: ubuntu-latest
     env:
       CLUSTER_NAME: reschedule-hook-test-cluster
+      CLUSTER_NAME_FAILED: reschedule-hook-test-cluster-failed
     steps:
       - uses: actions/checkout@v4
           
@@ -26,7 +29,7 @@ jobs:
 
       - name: Build images and load into kind
         run: |
-          make kind-image KIND_CLUSTER_NAME=${{ env.CLUSTER_NAME }}
+          make kind-image KIND_CLUSTER_NAME=${{ env.CLUSTER_NAME_FAILED }}
 
       - name: Run e2e tests
         run: |
@@ -45,7 +48,6 @@ jobs:
       - name: Run unit tests
         run: |
           make test-unit
-          
 
   lint:
     name: Run golangci-lint
@@ -59,3 +61,4 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+          args: ./pkg/... ./cmd/... ./test/...
