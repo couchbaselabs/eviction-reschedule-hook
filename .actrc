@@ -1,0 +1,12 @@
+# Act is a useful tool for testing github actions workflows locally
+# https://github.com/nektos/act
+# Use the act-workflow make command to run the actions. To keep the act image small,
+# we use a custom one that includes the tools we need for the workflows.
+# A pipeline that passes in act is not guaranteed to complete in gh actions, but it's a good
+# indicator and a useful way to get fast-feedback of test results
+--bind
+-P ubuntu-latest=act-image-lite
+-P self-hosted=act-image-lite
+--pull=false
+
+--container-architecture linux/amd64
