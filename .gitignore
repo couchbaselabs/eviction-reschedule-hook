@@ -1,7 +1,3 @@
 /bin
 
-/deploy/tls-secret.yaml
-
-
 .DS_Store
-.actrc

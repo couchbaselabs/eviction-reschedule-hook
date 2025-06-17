@@ -1,8 +1,10 @@
-name: "Run e2e tests"
-on: [pull_request, push]
+name: "CI Pipeline"
+on: 
+  pull_request:
+    branches:
+      - master
 
 jobs:
-  # The e2e workflow expects docker, kubectl, and go to be installed
   e2e-tests:
     name: Run e2e tests
     runs-on: ubuntu-latest
@@ -45,7 +47,6 @@ jobs:
       - name: Run unit tests
         run: |
           make test-unit
-          
 
   lint:
     name: Run golangci-lint
@@ -59,3 +60,4 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+          args: ./pkg/... ./cmd/... ./test/...

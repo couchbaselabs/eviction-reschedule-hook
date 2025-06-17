@@ -11,10 +11,7 @@ GOARCH := amd64
 
 .PHONY: lint
 lint:
-	@echo "Installing golangci-lint..."
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN)
-	@echo "Running golangci-lint..."
-	$(GOBIN)/golangci-lint run --timeout=15m ./pkg/... ./cmd/... ./test/...
+	golangci-lint run ./pkg/... ./cmd/... ./test/...
 
 .PHONY: build
 build: ## Build the binary
@@ -46,3 +43,8 @@ test-unit: ## Run all unit tests
 .PHONY: test-e2e
 test-e2e: ## Run all e2e tests
 	go test -v -count=1 ./test/e2e/...
+
+.PHONY: act-workflow
+act-workflow: ## Build act image and run the gh action workflows locally
+	docker buildx build --platform linux/amd64 -t act-image-lite ./act
+	act
