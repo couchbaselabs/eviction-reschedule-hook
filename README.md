@@ -112,15 +112,16 @@ env:
 
 ### Available Configuration Options
 
-| Environment Variable | Required | Default Value | Description |
-|---------------------|----------|---------------|-------------|
-| `POD_LABEL_SELECTOR_KEY` | Yes | `app` | Label selector key used to identify pods that should be handled by the reschedule hook
-| `POD_LABEL_SELECTOR_VALUE` | Yes | `couchbase` | Value for the above key
-| `RESCHEDULE_ANNOTATION_KEY` | No | `cao.couchbase.com/reschedule` | Annotation key added to pods for which requests are handled and have the above label, in order to mark them for rescheduling by an 
-associated operator
-| `RESCHEDULE_ANNOTATION_VALUE` | No | `true` | Value for the above key
-| `TRACK_RESCHEULED_PODS` | No | `true` | Whether to track pods for which the reschedule annotation has already been added. Required in environments where pods might be recreated with the same name. If set to `false`, the `ClusterRole` will only need `get` and `patch` permissions for the `pods` resource
-| `TRACKING_RESOURCE_TYPE` | No | `couchbasecluster` | Resource type used for tracking already rescheduled pods. Only effective if `TRACK_RESCHEULED_PODS` is `true`. Currently supports `couchbasecluster` and `namespace` resource types, for which the `ClusterRole` will require `get` and `patch` permissions
+| Environment Variable | Default Value | Description |
+|---------------------|---------------|-------------|
+| `POD_LABEL_SELECTOR_KEY` | `app` | Label selector key used to identify pods that should be handled by the reschedule hook
+| `POD_LABEL_SELECTOR_VALUE` | `couchbase` | Value for the above key
+| `RESCHEDULE_ANNOTATION_KEY` | `cao.couchbase.com/reschedule` | Key for the annotation added to pods for which requests are handled and have the above label, in order to mark them for rescheduling by an associated operator
+| `RESCHEDULE_ANNOTATION_VALUE` | `true` | Value for the above key
+| `TLS_CERT_FILE` | `/etc/webhook/certs/tls.crt` | Path to the mounted TLS certificate file
+| `TLS_KEY_FILE` | `/etc/webhook/certs/tls.key` | Path to the mounted TLS private key file
+| `TRACK_RESCHEULED_PODS` | `true` | Whether to track pods for which the reschedule annotation has already been added. Required in environments where pods might be recreated with the same name. If set to `false`, the `ClusterRole` will only need `get` and `patch` permissions for the `pods` resource
+| `TRACKING_RESOURCE_TYPE` | `couchbasecluster` | Resource type used for tracking already rescheduled pods. Only effective if `TRACK_RESCHEULED_PODS` is `true`. Currently supports `couchbasecluster` and `namespace` resource types, for which the `ClusterRole` will require `get` and `patch` permissions
 
 Note: To add support for additional tracking resource types, consider contributing to the project.
 
