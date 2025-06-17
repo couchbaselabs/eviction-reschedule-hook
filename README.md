@@ -3,18 +3,15 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/couchbaselabs/couchbase-reschedule-hook)](https://goreportcard.com/report/github.com/couchbaselabs/couchbase-reschedule-hook)
 
+The Couchbase Reschedule Hook is an open source project designed to help with the graceful handling of eviction requests for operator-managed Kubernetes (K8s) pods. Once running and configured using a controller and a validating webhook, eviction requests for select pods will be rejected, with an annotation added to those pods so that an operator can safely reschedule them. The project is intended specifically to protect stateful applications from K8s [node drains](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/), whereby kubectl will cordon a node and evict all pods that reside on it.
 
-## Overview
+## Overview
 
-The Couchbase Reschedule Hook is an open source project designed to help with the graceful handling of eviction requests for operator-managed Kubernetes (K8S) pods. Once running and configured using a controller and a validating webhook, eviction requests for select pods will be rejected, with an annotation added to those pods so that an operator can safely reschedule them. The project is intended specifically to manage K8s [node drains](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/), where nodes are cordoned and pods are removed from them using eviction requests.
+The reschedule hook was initially conceived to work alongside the [Couchbase Autonomous Operator](https://www.couchbase.com/products/operator/) (CAO), but there are a number of environment variables that can be [configured](#configuration) to enable it to work with other operator managed applications. In the 2.8.0 CAO release, a [reschedule annotation](https://docs.couchbase.com/operator/current/reference-annotations.html#pod-rescheduling) was implemented, allowing cluster administrators to manually mark operator-managed pods for rescheduling. Using this annotation, the reschedule hook will reject eviction requests while marking pods for rescheduling, which, in the case of node drains, means pods will be rescheduled onto uncordoned nodes.
 
-## Basic Architecture
+In scenarios where pods will be rescheduled with the same name, the reschedule hook can use another K8s resource to track which pods have already been marked for rescheduling, which is required due to how the drain command works internally. By default, the pod's associated Couchbase Cluster will be used, but this can be changed or disabled entirely.
 
-By default, the reschedule hook is configured to work alongside the [Couchbase Autonomous Operator](https://www.couchbase.com/products/operator/) (CAO), but there are a number of environment variables that can be used to change its behavior for other setups. In the 2.8.0 release of the CAO, a [reschedule annotation](https://docs.couchbase.com/operator/current/reference-annotations.html#pod-rescheduling) was implemented, allowing cluster administrators to manually mark operator-managed pods for rescheduling. Using this annotation, the reschedule hook will reject eviction requests while marking pods for rescheduling, which, in the case of node drains, means pods will be rescheduled onto uncordoned nodes.
-
-In scenarios where pods will be rescheduled with the same name, the reschedule hook can use another K8s resource to track which pods have already been marked for rescheduling, which is required due to how `kubectl drain` works internally. By default, the pod's associated Couchbase Cluster will be used, but this can be changed or disabled entirely by [configuring](#configuration) environment variables.
-
-See [LINK TO BLOG](blog) for a more detailed look into why this alternative approach to node drains is needed with stateful applications like Couchbase and how the project works alongside a CAO managed couchbase cluster.
+See [LINK TO BLOG](blog) for a more detailed look into why this alternative approach to node drains is useful when using K8s to run stateful applications like Couchbase and how the project works alongside a CAO managed couchbase cluster.
 
 ## Prerequisites
 
@@ -33,7 +30,7 @@ Recommended development tools:
 
 ## Deployment
 
-While this project is not currently available as a public image, a number of files and commands have been added to help with deploying the Couchbase Reschedule Hook into a K8s cluster. The following is a basic step-by-step guide to get the reschedule hook up and running in an existing K8s cluster.
+While this project is not currently available as a public image, a number of files and commands have been added to help with deploying the Couchbase Reschedule Hook into a K8s cluster. The following is a basic step-by-step guide to get the reschedule hook up and running in an existing cluster.
 
 ### Clone The Repository
 ```bash
@@ -43,7 +40,7 @@ cd couchbase-reschedule-hook
 
 ### Build The Image
 
-There are a number of [makefile](Makefile) commands to help build and optionally load the docker image into a repository where it can be used to create containers.
+There are a number of [makefile](Makefile) commands to help build and optionally push it to a repository where it can be used to create containers.
 
 For local development, build and load the image into a Kind cluster:
 ```bash
@@ -62,12 +59,12 @@ make docker-image DOCKER_USER=<myuser> DOCKER_IMAGE=<myimage> DOCKER_TAG=<mytag>
 
 ### Generate TLS (Optional)
 
-By default, validating webhooks in K8s require TLS as API server calls are done using HTTPS. Webhook servers must present valid TLS certificates signed by a trusted CA. When the webhook is created, the CA bundle must be provided in the `ValidatingWebhookConfiguration` manifest using the `clientConfig.caBundle` field. For development, a valid TLS secret and caBundle can be generated:
+By default, validating webhooks in K8s require TLS as API server calls are done using HTTPS. Webhook servers must present valid TLS certificates signed by a trusted CA. When the webhook is created, the CA bundle must be provided in the `caBundle` field of the `ValidatingWebhookConfiguration` manifest. For development, a valid TLS secret and caBundle can be generated:
 ```bash
 ./scripts/generate-certs.sh
 ```
 
-This creates a valid `kubernetes.io/tls` secret named `reschedule-hook-tls` and updates the caBundle in the example `validating-webhook-config.yaml` manifest. In production, this should be configured and managed by a cluster administrator.
+This creates a valid `kubernetes.io/tls` secret named `reschedule-hook-tls` and updates the required field in the example `validating-webhook-config.yaml` manifest. In production, this should be configured and managed by a cluster administrator.
 
 ### Deploy the Kubernetes Resources
 
@@ -80,7 +77,7 @@ The [reschedule hook deployment](/deploy/reschedule-hook-deployment.yaml) file c
 * ClusterRoleBinding
 * Deployment
 
-The pod spec in the deployment manifest will need to be updated to allow the container to pull and run the reschedule hook image. The environment variables should also be [configured](#configuring-the-reschedule-hook) for your required setup. Deploy the stack with:
+The pod spec in the `Deployment` manifest will need to be updated to allow the container to pull and run the reschedule hook image. The environment variables should also be [configured](#configuration) for your required setup. Deploy the stack with:
 
 ```bash
 kubectl apply -f deploy/reschedule-hook-deployment.yaml
@@ -92,7 +89,7 @@ The [webhook config](/deploy/validating-webhook-config.yaml) file contains the m
 kubectl apply -f deploy/validating-webhook-config.yaml
 ```
 
-The reschedule hook should now be running and `INFO Reschedule hook server started` should be logged by the container:
+Once the reschedule hook container is running, `INFO Reschedule hook server started` should be logged during startup:
 
 ```bash
 kubectl logs reschedule-hook-server
@@ -102,7 +99,7 @@ To test, try draining a node which hosts CAO managed pods. The drain command wil
 
 ## Configuration
 
-The reschedule hook can be configured using environment variables. Add these to the reschedule hook container template in your deployment:
+The reschedule hook can be configured using environment variables. Add these to the reschedule hook container template in your deployment using:
 
 ```yaml
 env:
