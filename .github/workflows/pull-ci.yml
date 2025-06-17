@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLUSTER_NAME: reschedule-hook-test-cluster
-      CLUSTER_NAME_FAILED: reschedule-hook-test-cluster-failed
     steps:
       - uses: actions/checkout@v4
           
@@ -29,7 +28,7 @@ jobs:
 
       - name: Build images and load into kind
         run: |
-          make kind-image KIND_CLUSTER_NAME=${{ env.CLUSTER_NAME_FAILED }}
+          make kind-image KIND_CLUSTER_NAME=${{ env.CLUSTER_NAME }}
 
       - name: Run e2e tests
         run: |
