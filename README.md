@@ -1,5 +1,6 @@
 # Couchbase Reschedule Hook
 
+
 A Kubernetes webhook that manages the rescheduling of Couchbase pods during cluster operations like node draining and upgrades.
 
 ## Overview
