@@ -1,0 +1,21 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "reschedule-webhook-config"
+webhooks:
+  - name: "reschedule-hook-server.default.svc"
+    rules:
+      - apiGroups:   [""]
+        apiVersions: ["v1"]
+        operations:  ["CREATE"]
+        resources:   ["pods/eviction"]
+    clientConfig:
+      service:
+        name: "reschedule-hook-server"
+        path: "/eviction"
+        namespace: "default"
+      caBundle: ""
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 10

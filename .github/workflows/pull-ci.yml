@@ -1,0 +1,61 @@
+name: "Run e2e tests"
+on: [pull_request, push]
+
+jobs:
+  # The e2e workflow expects docker, kubectl, and go to be installed
+  e2e-tests:
+    name: Run e2e tests
+    runs-on: ubuntu-latest
+    env:
+      CLUSTER_NAME: reschedule-hook-test-cluster
+    steps:
+      - uses: actions/checkout@v4
+          
+      - name: Setting up kind cluster
+        uses: helm/kind-action@v1
+        with:
+          version: "v0.26.0"
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          config: .github/kind-action-config.yaml
+
+      - name: Update kind config
+        run: |
+          kubectl version
+          kubectl config set-cluster ${{ env.CLUSTER_NAME }} --server=https://${{ env.CLUSTER_NAME }}-control-plane:6443
+          kubectl cluster-info
+
+      - name: Build images and load into kind
+        run: |
+          make kind-image KIND_CLUSTER_NAME=${{ env.CLUSTER_NAME }}
+
+      - name: Run e2e tests
+        run: |
+          make test-e2e
+
+      - name: Cleanup kind cluster
+        if: always()
+        run: kind delete cluster --name ${{ env.CLUSTER_NAME }}
+
+  unit-tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: |
+          make test-unit
+          
+
+  lint:
+    name: Run golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.3'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
