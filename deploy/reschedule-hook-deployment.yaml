@@ -19,7 +19,7 @@ spec:
       containers:
         - name: reschedule-hook-server
           image: 
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8443
               name: webhook-api
