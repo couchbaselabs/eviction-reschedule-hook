@@ -172,7 +172,7 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 		"namespace", eviction.Namespace)
 
 	pod, err := client.GetPod(eviction.Name, eviction.Namespace)
-	// If the pod doesn't exist, we can assume that it has already been recreated with a different name since the drain request
+	// If the pod doesn't exist, we can assume that it has been recreated with a different name
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			slog.Info("Pod has been rescheduled", "pod", eviction.Name, "namespace", eviction.Namespace)
@@ -198,7 +198,7 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 
 	// If the pod does not have the reschedule annotation, it's possible it has already been rescheduled with the same name.
 	// When the TrackRescheduledPods config value has been enabled, we will use an annotation on another resource to track which pods have already been rescheduled
-	// If the pod is missing the reschedule annotation, but is present in this tracking list, we can assume it has already been rescheduled with the same name.
+	// If the pod is missing the reschedule annotation, but is present in this tracking list, we can assume it has already been rescheduled with the same name
 	if client.ShouldTrackRescheduledPods() {
 		response := trackRescheduledPods(client, pod)
 		if response != nil {
@@ -206,7 +206,7 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 		}
 	}
 
-	// At this point, we can assume the pod has not already been rescheduled and should therefore be marked for rescheduling.
+	// At this point, we can assume the pod has not already been rescheduled and should therefore be marked for rescheduling
 	slog.Info("Adding reschedule annotation to pod", "pod", pod.Name, "namespace", pod.Namespace)
 	err = client.ReschedulePod(pod)
 	if err != nil {
@@ -215,15 +215,16 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 	}
 
 	// By denying the eviction with StatusReasonTooManyRequests, the drain command will continue attempting to evict
-	// the pod every 5 seconds until it has been rescheduled correctly.
+	// the pod every 5 seconds until it has been rescheduled correctly
 	return denyEviction(http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, RescheduleAnnotationAddedToPodMsg)
 }
 
-// handleTrackRescheduledPods handles situations where a pod may have been rescheduled with the same name. This method will
-// check for the existence of a tracking annotation on the couchbase cluster resource for the pod. If at this point
+// trackRescheduledPods handles situations where a pod may have been rescheduled with the same name. This method will
+// check for the existence of a tracking annotation on the tracking resource. If at this point
 // a tracking annotation already exists for the pod, it must have already been rescheduled with the same name.
-// We can therefore remove the tracking annotation and allow the eviction to proceed.
-// If the cluster is using InPlaceUpgrade, we will also add the pod to the reschedule hook pods list.
+// We can therefore remove the tracking annotation and allow the eviction to proceed
+// If the tracking resource does not have a tracking annotation for the pod and the pod will be rescheduled with the same name,
+// we will add a tracking annotation before marking the pod for rescheduling
 func trackRescheduledPods(client Client, pod *corev1.Pod) *admissionv1.AdmissionResponse {
 	trackingResourceInstance, err := client.GetTrackingResourceInstance(client.GetConfig().trackingResource.GetInstanceName(pod), pod.Namespace)
 	if err != nil {
@@ -232,7 +233,7 @@ func trackRescheduledPods(client Client, pod *corev1.Pod) *admissionv1.Admission
 	}
 
 	// If a tracking annotation already exists for the pod, but the pod does not have the reschedule annotation, it must have already been rescheduled
-	// and we can therefore remove the tracking annotation and allow the eviction to proceed.
+	// and we can therefore remove the tracking annotation and allow the eviction to proceed
 	if val, exists := trackingResourceInstance.GetAnnotations()[TrackingResourceAnnotation(pod.Name, pod.Namespace)]; exists && val == "true" {
 		slog.Info("Pod has been rescheduled, removing tracking annotation if needed", "pod", pod.Name, "namespace", pod.Namespace)
 

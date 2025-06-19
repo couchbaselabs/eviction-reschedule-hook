@@ -7,7 +7,7 @@ The Couchbase Reschedule Hook is an open source project designed to help with th
 
 ## Overview
 
-The reschedule hook was initially conceived to work alongside the [Couchbase Autonomous Operator](https://www.couchbase.com/products/operator/) (CAO), but there are a number of environment variables that can be [configured](#configuration) to enable it to work with other operator managed applications. In the 2.8.0 CAO release, a [reschedule annotation](https://docs.couchbase.com/operator/current/reference-annotations.html#pod-rescheduling) was implemented, allowing cluster administrators to manually mark operator-managed pods for rescheduling. Using this annotation, the reschedule hook will reject eviction requests while marking pods for rescheduling, which, in the case of node drains, means pods will be rescheduled onto uncordoned nodes.
+The reschedule hook was initially conceived to work alongside the [Couchbase Autonomous Operator](https://www.couchbase.com/products/operator/) (CAO), however the use case could be more broadly adopted. We have implemented a number of environment variables that can be [configured](#configuration) to enable it to work with other operator managed applications. In the 2.8.0 CAO release, a [reschedule annotation](https://docs.couchbase.com/operator/current/reference-annotations.html#pod-rescheduling) was implemented, allowing cluster administrators to manually mark operator-managed pods for rescheduling. The reschedule hook will reject eviction requests while marking pods for rescheduling using this annotation. The operator will then handle re-creating the pod, and Kubernetes will handle finding an uncordoned node that matches the new pod's scheduling requirements.
 
 In scenarios where pods will be rescheduled with the same name, the reschedule hook can use another K8s resource to track which pods have already been marked for rescheduling, which is required due to how the drain command works internally. By default, the pod's associated Couchbase Cluster will be used, but this can be changed or disabled entirely.
 
@@ -120,7 +120,7 @@ env:
 | `TRACK_RESCHEULED_PODS` | `true` | Whether to track pods for which the reschedule annotation has already been added. Required in environments where pods might be recreated with the same name. If set to `false`, the `ClusterRole` will only need `get` and `patch` permissions for the `pods` resource
 | `TRACKING_RESOURCE_TYPE` | `couchbasecluster` | Resource type used for tracking already rescheduled pods. Only effective if `TRACK_RESCHEULED_PODS` is `true`. Currently supports `couchbasecluster` and `namespace` resource types, for which the `ClusterRole` will require `get` and `patch` permissions
 
-Note: To add support for additional tracking resource types, consider contributing to the project.
+Note: If a tracking resource is being used and your operator removes pods via the deletion API, ensure the number of pods that can be rescheduled at once by your operator is kept below PDB thresholds, as these are not checked during pod deletions. To add support for additional tracking resource types, consider contributing to the project.
 
 ## Contributing
 
