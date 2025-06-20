@@ -34,8 +34,7 @@ images-clean: ## Remove docker image
 	docker rmi -f ${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
 
 .PHONY: test
-test: ## Run both unit and e2e tests
-	test-unit test-e2e
+test: test-unit test-e2e
 
 .PHONY: test-unit
 test-unit: ## Run all unit tests

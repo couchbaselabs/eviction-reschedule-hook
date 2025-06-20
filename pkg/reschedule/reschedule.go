@@ -23,6 +23,8 @@ import (
 
 const (
 	PodWaitingForRescheduleMsg                        = "Pod waiting to be rescheduled"
+	PodRescheduledMsg                                 = "Pod has been rescheduled"
+	PodRescheduledWithSameNameMsg                     = "Pod has been rescheduled with the same name"
 	RescheduleAnnotationAddedToPodMsg                 = "Reschedule annotation added to pod"
 	FailedToAddRescheduleAnnotationMsg                = "Failed to add reschedule annotation to pod"
 	FailedToGetTrackingResourceMsg                    = "Failed to get rescheduled pods tracking resource"
@@ -66,6 +68,7 @@ func Serve() {
 
 	go func() {
 		slog.Info("Reschedule hook server started")
+		config.Print()
 		if err := server.ListenAndServeTLS("", ""); !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Server failed to start", "error", err)
 		}
@@ -176,7 +179,7 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			slog.Info("Pod has been rescheduled", "pod", eviction.Name, "namespace", eviction.Namespace)
-			return allowEviction()
+			return denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledMsg)
 		}
 
 		slog.Error("Failed to get pod", "error", err)
@@ -220,11 +223,11 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 }
 
 // trackRescheduledPods handles situations where a pod may have been rescheduled with the same name. This method will
-// check for the existence of a tracking annotation on the tracking resource. If at this point
-// a tracking annotation already exists for the pod, it must have already been rescheduled with the same name.
-// We can therefore remove the tracking annotation and allow the eviction to proceed
+// check for the existence of a tracking annotation on the tracking resource.
+// If a tracking annotation already exists for the pod, it must have already been rescheduled with the same name.
+// We can therefore remove the tracking annotation and return a 404.
 // If the tracking resource does not have a tracking annotation for the pod and the pod will be rescheduled with the same name,
-// we will add a tracking annotation before marking the pod for rescheduling
+// we will add a tracking annotation before marking the pod for rescheduling.
 func trackRescheduledPods(client Client, pod *corev1.Pod) *admissionv1.AdmissionResponse {
 	trackingResourceInstance, err := client.GetTrackingResourceInstance(client.GetConfig().trackingResource.GetInstanceName(pod), pod.Namespace)
 	if err != nil {
@@ -232,8 +235,6 @@ func trackRescheduledPods(client Client, pod *corev1.Pod) *admissionv1.Admission
 		return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, FailedToGetTrackingResourceMsg)
 	}
 
-	// If a tracking annotation already exists for the pod, but the pod does not have the reschedule annotation, it must have already been rescheduled
-	// and we can therefore remove the tracking annotation and allow the eviction to proceed
 	if val, exists := trackingResourceInstance.GetAnnotations()[TrackingResourceAnnotation(pod.Name, pod.Namespace)]; exists && val == "true" {
 		slog.Info("Pod has been rescheduled, removing tracking annotation if needed", "pod", pod.Name, "namespace", pod.Namespace)
 
@@ -243,7 +244,7 @@ func trackRescheduledPods(client Client, pod *corev1.Pod) *admissionv1.Admission
 			return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, FailedToRemoveRescheduleHookTrackingAnnotationMsg)
 		}
 
-		return allowEviction()
+		return denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledWithSameNameMsg)
 	}
 
 	// If we want to track the rescheduled pods (this may be conditional on the tracking resource type), we can add an annotation to the tracking resource
@@ -265,7 +266,7 @@ func denyEviction(code int32, reason metav1.StatusReason, message string) *admis
 		Result: &metav1.Status{
 			Status:  "Failure",
 			Message: message,
-			Reason:  metav1.StatusReasonInvalid,
+			Reason:  reason,
 			Code:    code,
 		},
 	}

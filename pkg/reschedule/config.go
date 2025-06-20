@@ -1,6 +1,7 @@
 package reschedule
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -41,6 +42,16 @@ func (c *Config) ToEnvironment() map[string]string {
 	env["TRACK_RESCHEULED_PODS"] = strconv.FormatBool(c.trackRescheduledPods)
 	env["TRACKING_RESOURCE_TYPE"] = c.trackingResource.GetResourceType()
 	return env
+}
+
+func (c *Config) Print() {
+	slog.Info("Config loaded",
+		"rescheduleAnnotationKey", c.rescheduleAnnotationKey,
+		"rescheduleAnnotationValue", c.rescheduleAnnotationValue,
+		"podLabelSelectorKey", c.podLabelSelectorKey,
+		"podLabelSelectorValue", c.podLabelSelectorValue,
+		"trackRescheduledPods", c.trackRescheduledPods,
+		"trackingResource", c.trackingResource.GetResourceType())
 }
 
 // ConfigBuilder helps construct a Config with validation

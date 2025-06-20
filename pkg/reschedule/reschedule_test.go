@@ -95,7 +95,7 @@ func TestHandleEviction(t *testing.T) {
 			mockClient: &mockClient{
 				pod: nil,
 			},
-			expectedResult: allowEviction(),
+			expectedResult: denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledMsg),
 		},
 		{
 			testname:       "Ignore non-couchbase pods",
@@ -185,7 +185,7 @@ func TestHandleEviction(t *testing.T) {
 				shouldAddTrackingAnnotation: true,
 			},
 			expectedTrackingResourceAnnotations: map[string]string{},
-			expectedResult:                      allowEviction(),
+			expectedResult:                      denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledWithSameNameMsg),
 		},
 		{
 			testname:       "Deny eviction with TooManyRequests if different pod is tracked, but this pod is missing reschedule annotation",

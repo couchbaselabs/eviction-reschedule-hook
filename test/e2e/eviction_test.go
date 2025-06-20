@@ -66,8 +66,8 @@ func TestEvictMultipleCouchbasePodsAddsAnnotationWithTracking(t *testing.T) {
 		reschedule.TrackingResourceAnnotation(cbPod2.Name, cbPod2.Namespace): "true",
 	})
 
-	// By deleting and recreating the pods, like the operator would do, we expect subsequent evictions (which the drain command will trigger) to be allowed
-	// and for the tracking annotations to be removed from the couchbase cluster
+	// By deleting and recreating the pods with the same name, like the operator would do when InPlaceUpgrade is enabled, we expect subsequent evictions (which the drain command will trigger) to be
+	// rejected with a 404 and for the tracking annotations to be removed from the couchbase cluster
 	cluster.MustDeletePod(t, cbPod1.Name, cbPod1.Namespace)
 	cluster.MustDeletePod(t, cbPod2.Name, cbPod2.Namespace)
 
@@ -76,11 +76,9 @@ func TestEvictMultipleCouchbasePodsAddsAnnotationWithTracking(t *testing.T) {
 
 	responses = cluster.EvictPods(t, []corev1.Pod{*cbPod1, *cbPod2})
 
-	framework.ValidateEvictionAllowed(t, responses, cbPod1.Name)
-	framework.ValidateEvictionAllowed(t, responses, cbPod2.Name)
-
-	cluster.ValidatePodHasBeenEvicted(t, cbPod1.Name)
-	cluster.ValidatePodHasBeenEvicted(t, cbPod2.Name)
+	// Check that the eviction is denied with a 404
+	framework.ValidateEvictionDenied(t, responses, http.StatusNotFound, reschedule.PodRescheduledWithSameNameMsg, cbPod1.Name)
+	framework.ValidateEvictionDenied(t, responses, http.StatusNotFound, reschedule.PodRescheduledWithSameNameMsg, cbPod2.Name)
 
 	// Validate the tracking annotations have been removed from the couchbase cluster
 	cluster.ValidateCouchbaseClusterDoesNotHaveAnnotations(t, "couchbase-cluster", map[string]string{
@@ -115,7 +113,7 @@ func TestEvictCouchbasePodUsingNamespaceTrackingResource(t *testing.T) {
 
 	responses = cluster.EvictPods(t, []corev1.Pod{*cbPod1, *busyboxPod})
 
-	framework.ValidateEvictionAllowed(t, responses, cbPod1.Name)
+	framework.ValidateEvictionDenied(t, responses, http.StatusNotFound, reschedule.PodRescheduledWithSameNameMsg, cbPod1.Name)
 
 	cluster.ValidateNamespaceDoesNotHaveAnnotations(t, cluster.GetNamespace(), map[string]string{
 		reschedule.TrackingResourceAnnotation(cbPod1.Name, cbPod1.Namespace): "true",
@@ -152,7 +150,7 @@ func TestEvictPodWithDifferentConfigValuesUsingNamespaceTrackingResource(t *test
 
 	responses = cluster.EvictPods(t, []corev1.Pod{*cbPod, *otherPod})
 
-	framework.ValidateEvictionAllowed(t, responses, otherPod.Name)
+	framework.ValidateEvictionDenied(t, responses, http.StatusNotFound, reschedule.PodRescheduledWithSameNameMsg, otherPod.Name)
 
 	cluster.ValidateNamespaceDoesNotHaveAnnotations(t, cluster.GetNamespace(), map[string]string{
 		reschedule.TrackingResourceAnnotation(cbPod.Name, cbPod.Namespace): "true",
