@@ -129,7 +129,3 @@ Couchbase welcomes anyone that wants to help out, whether that includes improvin
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) for details.
-
-<div style="text-align: center; margin-top: 2em;">
-<a href="https://www.couchbase.com/" style="text-decoration: none; color: inherit;"><img src="https://www.couchbase.com/wp-content/uploads/2023/10/couchbase-favicon.svg" alt="Couchbase Autonomous Operator" style="width: 4em; height: 4em; vertical-align:middle;"><span style="margin-left: 0.5em; font-weight: bold; font-size: 1.2em;">Couchbase</span></a>
-</div>
