@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/couchbase/couchbase-reschedule-hook/pkg/reschedule/tracking"
+	"github.com/couchbaselabs/eviction-reschedule-hook/pkg/reschedule/tracking"
 )
 
 const (

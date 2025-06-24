@@ -1,4 +1,4 @@
-module github.com/couchbase/couchbase-reschedule-hook
+module github.com/couchbaselabs/eviction-reschedule-hook
 
 go 1.24.3
 

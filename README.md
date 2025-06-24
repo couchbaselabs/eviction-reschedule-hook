@@ -1,13 +1,13 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/couchbaselabs/couchbase-reschedule-hook)](https://goreportcard.com/report/github.com/couchbaselabs/couchbase-reschedule-hook)
+[![Go Report Card](https://goreportcard.com/badge/github.com/couchbaselabs/eviction-reschedule-hook)](https://goreportcard.com/report/github.com/couchbaselabs/eviction-reschedule-hook)
 
-# Couchbase Reschedule Hook
+# Eviction Reschedule Hook
 
-The Couchbase Reschedule Hook is an open source project designed to help with the graceful handling of eviction requests for operator-managed Kubernetes (K8s) pods. Once running and configured using a controller and a validating webhook, eviction requests for select pods will be rejected, with an annotation added to those pods so that an operator can safely reschedule them. The project is intended specifically to protect stateful applications from K8s [node drains](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/), whereby kubectl will cordon a node and evict all pods that reside on it.
+The Eviction Reschedule Hook is an open source project designed to help with the graceful handling of eviction requests for operator-managed Kubernetes (K8s) pods. Once running and configured using a controller and a validating webhook, eviction requests for select pods will be rejected, with an annotation added to those pods so that an operator can safely reschedule them. The project is intended specifically to protect stateful applications from K8s [node drains](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/), whereby kubectl will cordon a node and evict all pods that reside on it.
 
 ## Overview
 
-The reschedule hook was initially conceived to work alongside the [Couchbase Autonomous Operator](https://www.couchbase.com/products/operator/) (CAO), however the use case could be more broadly adopted. We have implemented a number of environment variables that can be [configured](#configuration) to enable it to work with other operator managed applications. In the 2.8.0 CAO release, a [reschedule annotation](https://docs.couchbase.com/operator/current/reference-annotations.html#pod-rescheduling) was implemented, allowing cluster administrators to manually mark operator-managed pods for rescheduling. The reschedule hook will reject eviction requests while marking pods for rescheduling using this annotation. The operator will then handle re-creating the pod, and Kubernetes will handle finding an uncordoned node that matches the new pod's scheduling requirements.
+The reschedule hook was initially conceived to work alongside the [Couchbase Autonomous Operator](https://www.couchbase.com/products/operator/) (CAO), however the use case could be more broadly adopted. We have implemented a number of environment variables that can be [configured](#configuration) to enable it to work with other operator managed applications. In CAO v2.7.0, we added a [reschedule annotation](https://docs.couchbase.com/operator/current/reference-annotations.html#pod-rescheduling), allowing cluster administrators to manually mark operator-managed pods for rescheduling. The reschedule hook will reject eviction requests while marking pods for rescheduling using this annotation. The operator will then handle re-creating the pod, and Kubernetes will handle finding an uncordoned node that matches the new pod's scheduling requirements.
 
 In scenarios where pods will be rescheduled with the same name, the reschedule hook can use another K8s resource to track which pods have already been marked for rescheduling, which is required due to how the drain command works internally. By default, the pod's associated Couchbase Cluster will be used, but this can be changed or disabled entirely.
 
@@ -30,12 +30,12 @@ Recommended development tools:
 
 ## Deployment
 
-While this project is not currently available as a public image, a number of files and commands have been added to help with deploying the Couchbase Reschedule Hook into a K8s cluster. The following is a basic step-by-step guide to get the reschedule hook up and running in an existing cluster.
+While this project is not currently available as a public image, a number of files and commands have been added to help with deploying the Eviction Reschedule Hook into a K8s cluster. The following is a basic step-by-step guide to get the reschedule hook up and running in an existing cluster.
 
 ### Clone The Repository
 ```bash
-git clone https://github.com/couchbaselabs/couchbase-reschedule-hook.git
-cd couchbase-reschedule-hook
+git clone https://github.com/couchbaselabs/eviction-reschedule-hook.git
+cd eviction-reschedule-hook
 ```
 
 ### Build The Image
@@ -124,12 +124,8 @@ Note: If a tracking resource is being used and your operator removes pods via th
 
 ## Contributing
 
-Couchbase welcomes anyone that wants to help out, whether that includes improving documentation or contributing code to fix bugs, increase test coverage, add additional features or anything in between. See the [contributing](CONTRIBUTE.md) document for more details.
+We welcome anyone that wants to help out, whether that includes improving documentation or contributing code to fix bugs, increase test coverage, add additional features or anything in between. See the [contributing](CONTRIBUTE.md) document for more details.
 
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) for details.
-
-<div style="text-align: center; margin-top: 2em;">
-<a href="https://www.couchbase.com/" style="text-decoration: none; color: inherit;"><img src="https://www.couchbase.com/wp-content/uploads/2023/10/couchbase-favicon.svg" alt="Couchbase Autonomous Operator" style="width: 4em; height: 4em; vertical-align:middle;"><span style="margin-left: 0.5em; font-weight: bold; font-size: 1.2em;">Couchbase</span></a>
-</div>

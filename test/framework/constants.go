@@ -10,7 +10,7 @@ const (
 	secretName          = "reschedule-hook-tls"
 	svcName             = "reschedule-hook-server"
 	webhookConfigName   = "reschedule-webhook-config"
-	rescheduleHookImage = "couchbase/couchbase-reschedule-hook:latest"
+	rescheduleHookImage = "couchbase/eviction-reschedule-hook:latest"
 )
 
 var CouchbaseClusterGVR = schema.GroupVersionResource{

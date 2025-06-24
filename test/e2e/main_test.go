@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/couchbase/couchbase-reschedule-hook/test/framework"
+	"github.com/couchbaselabs/eviction-reschedule-hook/test/framework"
 )
 
 // TestMain is the entry point for the test suite that handles setup and cleanup of test manifests

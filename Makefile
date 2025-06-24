@@ -1,4 +1,4 @@
-DOCKER_IMAGE ?= couchbase-reschedule-hook
+DOCKER_IMAGE ?= eviction-reschedule-hook
 DOCKER_USER ?= couchbase
 DOCKER_TAG ?= latest
 KIND_CLUSTER_NAME ?= kind
@@ -15,7 +15,7 @@ lint: ## Run linting
 
 .PHONY: build
 build: ## Build the binary
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o bin/couchbase-reschedule-hook cmd/main.go
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o bin/eviction-reschedule-hook cmd/main.go
 
 .PHONY: docker-build
 docker-build: ## Build docker image
