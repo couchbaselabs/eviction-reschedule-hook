@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/couchbase/couchbase-reschedule-hook/pkg/reschedule"
+	"github.com/couchbaselabs/eviction-reschedule-hook/pkg/reschedule"
 )
 
 func main() {

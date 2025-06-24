@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/couchbase/couchbase-reschedule-hook/pkg/reschedule"
-	"github.com/couchbase/couchbase-reschedule-hook/pkg/reschedule/tracking"
-	"github.com/couchbase/couchbase-reschedule-hook/test/framework"
+	"github.com/couchbaselabs/eviction-reschedule-hook/pkg/reschedule"
+	"github.com/couchbaselabs/eviction-reschedule-hook/pkg/reschedule/tracking"
+	"github.com/couchbaselabs/eviction-reschedule-hook/test/framework"
 	corev1 "k8s.io/api/core/v1"
 )
 

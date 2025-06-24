@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	reschedule "github.com/couchbase/couchbase-reschedule-hook/pkg/reschedule"
+	reschedule "github.com/couchbaselabs/eviction-reschedule-hook/pkg/reschedule"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -147,7 +147,7 @@ func (tc *TestCluster) CreateRescheduleHookServer(t *testing.T, rescheduleHookSe
 			Containers: []corev1.Container{
 				{
 					Name:            rescheduleHookServerName,
-					Image:           "couchbase/couchbase-reschedule-hook:latest",
+					Image:           rescheduleHookImage,
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					Ports: []corev1.ContainerPort{
 						{

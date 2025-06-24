@@ -11,14 +11,14 @@ RUN go mod download
 # Copy only the necessary source files
 COPY cmd/ ./cmd/
 COPY pkg/ ./pkg/
-RUN go build -o couchbase-reschedule-hook cmd/main.go
+RUN go build -o eviction-reschedule-hook cmd/main.go
 
 FROM scratch
 
-LABEL org.opencontainers.image.source="https://github.com/couchbase/couchbase-reschedule-hook" \
-      org.opencontainers.image.description="Couchbase Reschedule Hook" \
+LABEL org.opencontainers.image.source="https://github.com/couchbaselabs/eviction-reschedule-hook" \
+      org.opencontainers.image.description="Eviction Reschedule Hook" \
       org.opencontainers.image.licenses="Apache-2.0"
 
-COPY --from=builder /app/couchbase-reschedule-hook /couchbase-reschedule-hook
+COPY --from=builder /app/eviction-reschedule-hook /eviction-reschedule-hook
 USER 8453
-CMD ["/couchbase-reschedule-hook"]
+CMD ["/eviction-reschedule-hook"]
