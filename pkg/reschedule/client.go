@@ -37,7 +37,7 @@ type ClientImpl struct {
 	dynamicClient dynamic.Interface
 }
 
-func NewClient(config *Config) (Client, error) {
+func NewClient(config *Config, dryRun bool) (Client, error) {
 	kubeConfig, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -46,6 +46,15 @@ func NewClient(config *Config) (Client, error) {
 	dynamicClient, err := dynamic.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, err
+	}
+
+	if dryRun {
+		return &DryRunClientImpl{
+			ClientImpl: &ClientImpl{
+				dynamicClient: dynamicClient,
+				config:        config,
+			},
+		}, nil
 	}
 
 	return &ClientImpl{
@@ -137,4 +146,25 @@ func (c *ClientImpl) removeResourceAnnotation(name, annotation string, resourceI
 
 func TrackingResourceAnnotation(podName, podNamespace string) string {
 	return RescheduledPodsTrackingKeyPrefix + podNamespace + "." + podName
+}
+
+// DryRunClientImpl embeds ClientImpl to inherit all read-only methods
+// and overrides only the mutating methods to be no-ops
+type DryRunClientImpl struct {
+	*ClientImpl
+}
+
+func (c *DryRunClientImpl) ReschedulePod(pod *corev1.Pod) error {
+	// No-op for dry run
+	return nil
+}
+
+func (c *DryRunClientImpl) AddRescheduleHookTrackingAnnotation(podName, podNamespace, resourceInstanceName string) error {
+	// No-op for dry run
+	return nil
+}
+
+func (c *DryRunClientImpl) RemoveRescheduleHookTrackingAnnotation(podName, podNamespace, resourceInstanceName string) error {
+	// No-op for dry run
+	return nil
 }

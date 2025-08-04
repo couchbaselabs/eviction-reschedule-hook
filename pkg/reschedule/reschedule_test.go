@@ -252,7 +252,7 @@ func TestHandleEviction(t *testing.T) {
 				},
 			}
 
-			result := handleEviction(eviction, testcase.mockClient)
+			result := handleEviction(eviction, testcase.mockClient, CreateLogger(eviction.Name, eviction.Namespace, false))
 
 			if !reflect.DeepEqual(result, testcase.expectedResult) {
 				t.Errorf("Expected response to be %v, got %v", testcase.expectedResult, result)

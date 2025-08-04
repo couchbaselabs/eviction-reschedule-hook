@@ -76,7 +76,7 @@ To run all tests:
 ```bash
 make test
 ```
-The e2e tests will require a running K8s cluster. If this is not available, consider running the test workflow using [act](#submitting-pull-requests).
+The e2e tests will require a running K8s cluster and reschedule hook image loaded as couchbase/eviction-reschedule-hook:latest. If this is not available, consider running the test workflow using [act](#submitting-pull-requests).
 
 ### Test Guidelines
 
