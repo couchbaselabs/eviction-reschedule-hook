@@ -23,7 +23,7 @@ import (
 
 const (
 	PodWaitingForRescheduleMsg                        = "Pod waiting to be rescheduled"
-	PodRescheduledMsg                                 = "Pod has been rescheduled"
+	PodNoLongerExistsMsg                              = "Pod no longer exists"
 	PodRescheduledWithSameNameMsg                     = "Pod has been rescheduled with the same name"
 	RescheduleAnnotationAddedToPodMsg                 = "Reschedule annotation added to pod"
 	FailedToAddRescheduleAnnotationMsg                = "Failed to add reschedule annotation to pod"
@@ -187,7 +187,7 @@ func handleEviction(eviction policyv1.Eviction, client Client, logger *slog.Logg
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			logger.Info("Pod no longer exists")
-			return denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledMsg)
+			return denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodNoLongerExistsMsg)
 		}
 
 		logger.Error("Failed to get pod", "error", err)
@@ -244,7 +244,7 @@ func trackRescheduledPods(client Client, pod *corev1.Pod, logger *slog.Logger) *
 	}
 
 	if val, exists := trackingResourceInstance.GetAnnotations()[TrackingResourceAnnotation(pod.Name, pod.Namespace)]; exists && val == "true" {
-		logger.Info("Pod has been rescheduled, removing tracking annotation if needed")
+		logger.Info("Pod has been rescheduled with the same name")
 
 		err = client.RemoveRescheduleHookTrackingAnnotation(pod.Name, pod.Namespace, trackingResourceInstance.GetName())
 		if err != nil {

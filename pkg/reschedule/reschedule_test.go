@@ -95,7 +95,7 @@ func TestHandleEviction(t *testing.T) {
 			mockClient: &mockClient{
 				pod: nil,
 			},
-			expectedResult: denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledMsg),
+			expectedResult: denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodNoLongerExistsMsg),
 		},
 		{
 			testname:       "Ignore non-couchbase pods",
