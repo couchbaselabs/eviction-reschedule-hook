@@ -23,7 +23,7 @@ import (
 
 const (
 	PodWaitingForRescheduleMsg                        = "Pod waiting to be rescheduled"
-	PodRescheduledMsg                                 = "Pod has been rescheduled"
+	PodNoLongerExistsMsg                              = "Pod no longer exists"
 	PodRescheduledWithSameNameMsg                     = "Pod has been rescheduled with the same name"
 	RescheduleAnnotationAddedToPodMsg                 = "Reschedule annotation added to pod"
 	FailedToAddRescheduleAnnotationMsg                = "Failed to add reschedule annotation to pod"
@@ -135,16 +135,26 @@ func serveEviction(w http.ResponseWriter, r *http.Request, config *Config) {
 		return
 	}
 
+	dryRun := isDryRun(&eviction)
+
 	// Initialise the Kubernetes client
-	client, err := NewClient(config)
+	client, err := NewClient(config, dryRun)
 	if err != nil {
 		slog.Error("Failed to create Kubernetes client", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	logger := CreateLogger(eviction.Name, eviction.Namespace, dryRun)
+
 	// Handle the eviction request
-	response := handleEviction(eviction, client)
+	response := handleEviction(eviction, client, logger)
+
+	if dryRun && response.Result != nil {
+		response.Result.Message = fmt.Sprintf("%s (server dry run)", response.Result.Message)
+		response.Warnings = append(response.Warnings, "Pods will not be marked for rescheduling on a dry run")
+	}
+
 	// Set the UID of the response to the UID of the request
 	response.UID = reviewRequest.Request.UID
 
@@ -169,33 +179,31 @@ func serveEviction(w http.ResponseWriter, r *http.Request, config *Config) {
 	}
 }
 
-func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.AdmissionResponse {
-	slog.Info("Handling eviction request",
-		"pod", eviction.Name,
-		"namespace", eviction.Namespace)
+func handleEviction(eviction policyv1.Eviction, client Client, logger *slog.Logger) *admissionv1.AdmissionResponse {
+	logger.Info("Handling eviction request")
 
 	pod, err := client.GetPod(eviction.Name, eviction.Namespace)
 	// If the pod doesn't exist, we can assume that it has already been evicted
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			slog.Info("Pod no longer exists", "pod", eviction.Name, "namespace", eviction.Namespace)
-			return denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledMsg)
+			logger.Info("Pod no longer exists")
+			return denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodNoLongerExistsMsg)
 		}
 
-		slog.Error("Failed to get pod", "error", err)
+		logger.Error("Failed to get pod", "error", err)
 		return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, FailedToGetPodMsg)
 	}
 
 	// If the pod does not have the correct label, we can allow the eviction immediately
 	if pod.Labels[client.GetConfig().podLabelSelectorKey] != client.GetConfig().podLabelSelectorValue {
-		slog.Info(fmt.Sprintf("Pod does not have the %s=%s label, eviction allowed", client.GetConfig().podLabelSelectorKey, client.GetConfig().podLabelSelectorValue), "pod", pod.Name, "namespace", pod.Namespace)
+		logger.Info(fmt.Sprintf("Pod does not have the %s=%s label, eviction allowed", client.GetConfig().podLabelSelectorKey, client.GetConfig().podLabelSelectorValue))
 		return allowEviction()
 	}
 
 	// If the pod has already been marked for rescheduling, we can exit here but deny the eviction to keep the drain command
 	// in a loop until the pod no longer exists
 	if reschedule, exists := pod.GetAnnotations()[client.GetConfig().rescheduleAnnotationKey]; exists && reschedule == client.GetConfig().rescheduleAnnotationValue {
-		slog.Info("Pod waiting to be rescheduled", "pod", pod.Name, "namespace", pod.Namespace)
+		logger.Info("Pod waiting to be rescheduled")
 		return denyEviction(http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, PodWaitingForRescheduleMsg)
 	}
 
@@ -203,17 +211,17 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 	// When the TrackRescheduledPods config value has been enabled, we will use an annotation on another resource to track which pods have already been rescheduled
 	// If the pod is missing the reschedule annotation, but is present in this tracking list, we can assume it has already been rescheduled with the same name
 	if client.ShouldTrackRescheduledPods() {
-		response := trackRescheduledPods(client, pod)
+		response := trackRescheduledPods(client, pod, logger)
 		if response != nil {
 			return response
 		}
 	}
 
 	// At this point, we can assume the pod has not already been rescheduled and should therefore be marked for rescheduling
-	slog.Info("Adding reschedule annotation to pod", "pod", pod.Name, "namespace", pod.Namespace)
+	logger.Info("Adding reschedule annotation to pod")
 	err = client.ReschedulePod(pod)
 	if err != nil {
-		slog.Error("Failed to add reschedule annotation to pod", "error", err)
+		logger.Error("Failed to add reschedule annotation to pod", "error", err)
 		return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, FailedToAddRescheduleAnnotationMsg)
 	}
 
@@ -228,19 +236,19 @@ func handleEviction(eviction policyv1.Eviction, client Client) *admissionv1.Admi
 // We can therefore remove the tracking annotation and return a 404.
 // If the tracking resource does not have a tracking annotation for the pod and the pod will be rescheduled with the same name,
 // we will add a tracking annotation before marking the pod for rescheduling.
-func trackRescheduledPods(client Client, pod *corev1.Pod) *admissionv1.AdmissionResponse {
+func trackRescheduledPods(client Client, pod *corev1.Pod, logger *slog.Logger) *admissionv1.AdmissionResponse {
 	trackingResourceInstance, err := client.GetTrackingResourceInstance(client.GetConfig().trackingResource.GetInstanceName(pod), pod.Namespace)
 	if err != nil {
-		slog.Error("Failed to get tracking resource", "error", err)
+		logger.Error("Failed to get tracking resource", "error", err)
 		return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, FailedToGetTrackingResourceMsg)
 	}
 
 	if val, exists := trackingResourceInstance.GetAnnotations()[TrackingResourceAnnotation(pod.Name, pod.Namespace)]; exists && val == "true" {
-		slog.Info("Pod has been rescheduled with the same name", "pod", pod.Name, "namespace", pod.Namespace)
+		logger.Info("Pod has been rescheduled with the same name")
 
 		err = client.RemoveRescheduleHookTrackingAnnotation(pod.Name, pod.Namespace, trackingResourceInstance.GetName())
 		if err != nil {
-			slog.Error("Failed to remove tracking annotation", "error", err)
+			logger.Error("Failed to remove tracking annotation", "error", err)
 			return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, FailedToRemoveRescheduleHookTrackingAnnotationMsg)
 		}
 
@@ -249,10 +257,10 @@ func trackRescheduledPods(client Client, pod *corev1.Pod) *admissionv1.Admission
 
 	// If we want to track the rescheduled pods (this may be conditional on the tracking resource type), we can add an annotation to the tracking resource
 	if client.ShouldAddTrackingAnnotation(trackingResourceInstance) {
-		slog.Info("Pod will be rescheduled with the same name, adding annotation to tracking resource", "pod", pod.Name, "namespace", pod.Namespace, "trackingResource", trackingResourceInstance.GetName())
+		logger.Info("Pod will be rescheduled with the same name, adding annotation to tracking resource", "trackingResource", trackingResourceInstance.GetName())
 		err = client.AddRescheduleHookTrackingAnnotation(pod.Name, pod.Namespace, trackingResourceInstance.GetName())
 		if err != nil {
-			slog.Error("Failed to add tracking annotation", "error", err)
+			logger.Error("Failed to add tracking annotation", "error", err)
 			return denyEviction(http.StatusInternalServerError, metav1.StatusReasonInternalError, FailedToAddRescheduleHookTrackingAnnotationMsg)
 		}
 	}
@@ -276,4 +284,18 @@ func allowEviction() *admissionv1.AdmissionResponse {
 	return &admissionv1.AdmissionResponse{
 		Allowed: true,
 	}
+}
+
+func isDryRun(eviction *policyv1.Eviction) bool {
+	if eviction.DeleteOptions == nil {
+		return false
+	}
+
+	for _, dryRunOption := range eviction.DeleteOptions.DryRun {
+		if dryRunOption == metav1.DryRunAll {
+			return true
+		}
+	}
+
+	return false
 }

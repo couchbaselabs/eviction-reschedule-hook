@@ -41,16 +41,24 @@ func (tc *TestCluster) MustCreateCouchbasePod(t *testing.T, name, cbCluster stri
 	return createBasicPod(t, tc.client, name, tc.GetNamespace(), labels)
 }
 
+func (tc *TestCluster) EvictPodsDryRun(t *testing.T, pods []corev1.Pod) map[string]error {
+	return tc.sendConcurrentEvictionRequests(t, pods, &metav1.DeleteOptions{DryRun: []string{metav1.DryRunAll}})
+}
+
+func (tc *TestCluster) EvictPods(t *testing.T, pods []corev1.Pod) map[string]error {
+	return tc.sendConcurrentEvictionRequests(t, pods, nil)
+}
+
 // EvictPods sends eviction requests concurrently to the given pods and returns a map of pod names to errors
 // The concurrent eviction of pods is more similar to the drain command
-func (tc *TestCluster) EvictPods(t *testing.T, pods []corev1.Pod) map[string]error {
+func (tc *TestCluster) sendConcurrentEvictionRequests(t *testing.T, pods []corev1.Pod, deleteOptions *metav1.DeleteOptions) map[string]error {
 	var wg sync.WaitGroup
 	ch := make(chan map[string]error, len(pods))
 	for _, pod := range pods {
 		wg.Add(1)
 		go func(pod corev1.Pod, ch chan map[string]error) {
 			defer wg.Done()
-			err := tc.EvictPod(t, pod.Name, pod.Namespace)
+			err := tc.EvictPod(t, pod.Name, pod.Namespace, deleteOptions)
 			ch <- map[string]error{pod.Name: err}
 		}(pod, ch)
 	}
@@ -68,13 +76,15 @@ func (tc *TestCluster) EvictPods(t *testing.T, pods []corev1.Pod) map[string]err
 }
 
 // EvictPod sends an eviction request for a single pod
-func (tc *TestCluster) EvictPod(t *testing.T, name, namespace string) error {
+func (tc *TestCluster) EvictPod(t *testing.T, name, namespace string, deleteOptions *metav1.DeleteOptions) error {
 	eviction := &policyv1.Eviction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
+		DeleteOptions: deleteOptions,
 	}
+
 	return tc.client.CoreV1().Pods(tc.GetNamespace()).EvictV1(context.TODO(), eviction)
 }
 

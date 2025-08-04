@@ -95,7 +95,7 @@ func TestHandleEviction(t *testing.T) {
 			mockClient: &mockClient{
 				pod: nil,
 			},
-			expectedResult: denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodRescheduledMsg),
+			expectedResult: denyEviction(http.StatusNotFound, metav1.StatusReasonNotFound, PodNoLongerExistsMsg),
 		},
 		{
 			testname:       "Ignore non-couchbase pods",
@@ -252,7 +252,7 @@ func TestHandleEviction(t *testing.T) {
 				},
 			}
 
-			result := handleEviction(eviction, testcase.mockClient)
+			result := handleEviction(eviction, testcase.mockClient, CreateLogger(eviction.Name, eviction.Namespace, false))
 
 			if !reflect.DeepEqual(result, testcase.expectedResult) {
 				t.Errorf("Expected response to be %v, got %v", testcase.expectedResult, result)

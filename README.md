@@ -11,7 +11,7 @@ The reschedule hook was initially conceived to work alongside the [Couchbase Aut
 
 In scenarios where pods will be rescheduled with the same name, the reschedule hook can use another K8s resource to track which pods have already been marked for rescheduling, which is required due to how the drain command works internally. By default, the pod's associated Couchbase Cluster will be used, but this can be changed or disabled entirely.
 
-See [LINK TO BLOG](blog) for a more detailed look into why this alternative approach to node drains is useful when using K8s to run stateful applications like Couchbase and how the project works alongside a CAO managed couchbase cluster.
+Take a look at this [blog](https://www.couchbase.com/blog/node-drains-webhook-pod-removal/) we wrote for a more detailed look into why this alternative approach to node drains is useful when using K8s to run stateful applications like Couchbase and how the project works alongside a CAO managed couchbase cluster.
 
 ## Prerequisites
 

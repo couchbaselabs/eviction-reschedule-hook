@@ -156,3 +156,31 @@ func TestEvictPodWithDifferentConfigValuesUsingNamespaceTrackingResource(t *test
 		reschedule.TrackingResourceAnnotation(cbPod.Name, cbPod.Namespace): "true",
 	})
 }
+
+func TestEvicPodsWithDryRunDoesNotMutateResources(t *testing.T) {
+	cluster := framework.SetupTestCluster(t, nil)
+
+	cleanup := cluster.MustCreateCouchbaseCluster(t, "couchbase-cluster", false)
+	defer cleanup()
+
+	cbPod1 := cluster.MustCreateCouchbasePod(t, "couchbase-1", "couchbase-cluster")
+	cbPod2 := cluster.MustCreateCouchbasePod(t, "couchbase-2", "couchbase-cluster")
+	busyboxPod := cluster.MustCreatePod(t, "busybox", nil)
+
+	responses := cluster.EvictPodsDryRun(t, []corev1.Pod{*cbPod1, *cbPod2, *busyboxPod})
+
+	// Validate that the eviction is denied with TooManyRequests for the couchbase pods, and allowed for the busybox pod
+	framework.ValidateEvictionDenied(t, responses, http.StatusTooManyRequests, reschedule.RescheduleAnnotationAddedToPodMsg, cbPod1.Name)
+	framework.ValidateEvictionDenied(t, responses, http.StatusTooManyRequests, reschedule.RescheduleAnnotationAddedToPodMsg, cbPod2.Name)
+	framework.ValidateEvictionAllowed(t, responses, busyboxPod.Name)
+
+	// Validate the couchbase pods do not have the reschedule annotation as they should not have been mutated during a dry run
+	cluster.ValidatePodDoesNotHaveAnnotation(t, cbPod1.Name, reschedule.DefaultRescheduleAnnotationKey, reschedule.DefaultRescheduleAnnotationValue)
+	cluster.ValidatePodDoesNotHaveAnnotation(t, cbPod2.Name, reschedule.DefaultRescheduleAnnotationKey, reschedule.DefaultRescheduleAnnotationValue)
+
+	// Validate the couchbase cluster does not have the tracking annotation
+	cluster.ValidateCouchbaseClusterDoesNotHaveAnnotations(t, "couchbase-cluster", map[string]string{
+		reschedule.TrackingResourceAnnotation(cbPod1.Name, cbPod1.Namespace): "true",
+		reschedule.TrackingResourceAnnotation(cbPod2.Name, cbPod2.Namespace): "true",
+	})
+}

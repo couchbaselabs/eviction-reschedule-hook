@@ -17,5 +17,5 @@ webhooks:
         namespace: "default"
       caBundle: ""
     admissionReviewVersions: ["v1"]
-    sideEffects: None
+    sideEffects: NoneOnDryRun
     timeoutSeconds: 10
