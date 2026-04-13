@@ -38,9 +38,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go
-RUN wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz \
-    && tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz \
-    && rm go1.21.0.linux-amd64.tar.gz
+RUN wget https://go.dev/dl/go1.25.6.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf go1.25.6.linux-amd64.tar.gz \
+    && rm go1.25.6.linux-amd64.tar.gz
 
 # Add Go to PATH
 ENV PATH="/usr/local/go/bin:${PATH}"

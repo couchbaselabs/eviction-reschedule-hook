@@ -1,6 +1,6 @@
 module github.com/couchbaselabs/eviction-reschedule-hook
 
-go 1.24.3
+go 1.25.6
 
 require (
 	k8s.io/api v0.33.1
