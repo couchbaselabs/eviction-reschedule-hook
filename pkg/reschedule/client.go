@@ -16,6 +16,7 @@ import (
 )
 
 var podResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+var nodeResource = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
 
 const (
 	RescheduledPodsTrackingKeyPrefix = "reschedule.hook/"
@@ -23,6 +24,7 @@ const (
 
 type Client interface {
 	GetPod(name, namespace string) (*corev1.Pod, error)
+	GetNode(name string) (*corev1.Node, error)
 	ReschedulePod(pod *corev1.Pod) error
 	GetTrackingResourceInstance(name, namespace string) (*unstructured.Unstructured, error)
 	AddRescheduleHookTrackingAnnotation(podName, podNamespace, resourceInstanceName string) error
@@ -80,6 +82,21 @@ func (c *ClientImpl) GetPod(name, namespace string) (*corev1.Pod, error) {
 	}
 
 	return pod, nil
+}
+
+func (c *ClientImpl) GetNode(name string) (*corev1.Node, error) {
+	nodeUnstructured, err := c.dynamicClient.Resource(nodeResource).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	node := &corev1.Node{}
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(nodeUnstructured.Object, node)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert unstructured to Node: %w", err)
+	}
+
+	return node, nil
 }
 
 func (c *ClientImpl) GetTrackingResourceInstance(name, namespace string) (*unstructured.Unstructured, error) {

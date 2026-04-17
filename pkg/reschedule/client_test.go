@@ -42,6 +42,36 @@ func TestGetPod(t *testing.T) {
 	}
 }
 
+func TestGetNode(t *testing.T) {
+	stub := &corev1.Node{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Node",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-node",
+		},
+	}
+
+	unstructuredStub, err := runtime.DefaultUnstructuredConverter.ToUnstructured(stub)
+	if err != nil {
+		t.Fatalf("Failed to convert node to unstructured: %v", err)
+	}
+
+	client := &ClientImpl{
+		dynamicClient: fake.NewSimpleDynamicClient(runtime.NewScheme(), &unstructured.Unstructured{Object: unstructuredStub}),
+	}
+
+	node, err := client.GetNode("test-node")
+	if err != nil {
+		t.Fatalf("Failed to get node: %v", err)
+	}
+
+	if !reflect.DeepEqual(node, stub) {
+		t.Fatalf("Expected node to be %v, got %v", stub, node)
+	}
+}
+
 func TestGetTrackingResourceInstance(t *testing.T) {
 	testcases := []struct {
 		testname             string

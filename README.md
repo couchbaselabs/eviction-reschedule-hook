@@ -122,6 +122,26 @@ env:
 
 Note: If a tracking resource is being used and your operator removes pods via the deletion API, ensure the number of pods that can be rescheduled at once by your operator is kept below PDB thresholds, as these are not checked during pod deletions. To add support for additional tracking resource types, consider contributing to the project.
 
+### Node Failure Detection (Optional)
+
+The reschedule hook can optionally detect node failure signals and allow eviction immediately when a node is failing, rather than orchestrating a swap rebalance. This is useful when a node has conditions like `DiskPressure` or taints set by a lifecycle manager.
+
+| Environment Variable | Default Value | Description |
+|---------------------|---------------|-------------|
+| `ENABLE_NODE_CONDITION_CHECK` | `false` | Enable node failure detection. When `true`, the webhook will check the node for failure conditions/taints before denying eviction |
+| `NODE_FAILURE_CONDITION_TYPES` | `` | Comma-separated list of node condition types that indicate failure (e.g. `DiskPressure,MemoryPressure`). A condition matches when its `Type` equals a configured value and `Status == True` |
+| `NODE_FAILURE_TAINT_KEYS` | `` | Comma-separated list of node taint keys that indicate failure. Any taint effect is matched |
+
+If either a matching condition or a matching taint is found, eviction is allowed immediately. If the node cannot be read (API error), the hook fails closed and continues with normal eviction denial.
+
+**RBAC requirement:** When `ENABLE_NODE_CONDITION_CHECK=true`, the webhook's `ServiceAccount` needs `get` permission on the `nodes` resource at the cluster scope. Add the following to the `ClusterRole` in `deploy/reschedule-hook-deployment.yaml`:
+
+```yaml
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get"]
+```
+
 ## Contributing
 
 We welcome anyone that wants to help out, whether that includes improving documentation or contributing code to fix bugs, increase test coverage, add additional features or anything in between. See the [contributing](CONTRIBUTE.md) document for more details.

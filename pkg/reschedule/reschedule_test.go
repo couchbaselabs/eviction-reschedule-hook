@@ -1,6 +1,7 @@
 package reschedule
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -16,6 +17,8 @@ import (
 
 type mockClient struct {
 	pod                         *corev1.Pod
+	node                        *corev1.Node
+	nodeErr                     error
 	config                      *Config
 	trackingResourceAnnotations map[string]string
 	shouldTrackRescheduledPods  bool
@@ -27,6 +30,16 @@ func (m *mockClient) GetPod(name, namespace string) (*corev1.Pod, error) {
 		return nil, k8serrors.NewNotFound(schema.GroupResource{Group: "", Resource: "pods"}, name)
 	}
 	return m.pod, nil
+}
+
+func (m *mockClient) GetNode(name string) (*corev1.Node, error) {
+	if m.nodeErr != nil {
+		return nil, m.nodeErr
+	}
+	if m.node == nil {
+		return nil, k8serrors.NewNotFound(schema.GroupResource{Group: "", Resource: "nodes"}, name)
+	}
+	return m.node, nil
 }
 
 func (m *mockClient) ReschedulePod(pod *corev1.Pod) error {
@@ -240,11 +253,218 @@ func TestHandleEviction(t *testing.T) {
 			},
 			expectedResult: denyEviction(http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, RescheduleAnnotationAddedToPodMsg),
 		},
+		{
+			testname:       "Allow eviction when node has matching failure condition (Status=True)",
+			evictedPodName: "pod-on-failing-node",
+			mockClient: &mockClient{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pod-on-failing-node",
+						Namespace: "default",
+						Labels: map[string]string{
+							"app": "couchbase",
+						},
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+				},
+				node: &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node1",
+					},
+					Status: corev1.NodeStatus{
+						Conditions: []corev1.NodeCondition{
+							{
+								Type:   corev1.NodeDiskPressure,
+								Status: corev1.ConditionTrue,
+							},
+						},
+					},
+				},
+				config: NewConfigBuilder().
+					WithEnableNodeConditionCheck(true).
+					WithNodeFailureConditionTypes([]string{"DiskPressure"}).
+					Build(),
+			},
+			expectedResult: allowEviction(),
+		},
+		{
+			testname:       "Deny eviction when node condition is present but Status=False",
+			evictedPodName: "pod-on-healthy-node",
+			mockClient: &mockClient{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pod-on-healthy-node",
+						Namespace: "default",
+						Labels: map[string]string{
+							"app": "couchbase",
+						},
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+				},
+				node: &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node1",
+					},
+					Status: corev1.NodeStatus{
+						Conditions: []corev1.NodeCondition{
+							{
+								Type:   corev1.NodeDiskPressure,
+								Status: corev1.ConditionFalse,
+							},
+						},
+					},
+				},
+				config: NewConfigBuilder().
+					WithEnableNodeConditionCheck(true).
+					WithNodeFailureConditionTypes([]string{"DiskPressure"}).
+					Build(),
+			},
+			expectedResult: denyEviction(http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, RescheduleAnnotationAddedToPodMsg),
+		},
+		{
+			testname:       "Fail closed (deny) when GetNode errors",
+			evictedPodName: "pod-node-error",
+			mockClient: &mockClient{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pod-node-error",
+						Namespace: "default",
+						Labels: map[string]string{
+							"app": "couchbase",
+						},
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+				},
+				nodeErr: fmt.Errorf("connection refused"),
+				config: NewConfigBuilder().
+					WithEnableNodeConditionCheck(true).
+					WithNodeFailureConditionTypes([]string{"DiskPressure"}).
+					Build(),
+			},
+			expectedResult: denyEviction(http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, RescheduleAnnotationAddedToPodMsg),
+		},
+		{
+			testname:       "Skip node check when feature disabled via config",
+			evictedPodName: "pod-check-disabled",
+			mockClient: &mockClient{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pod-check-disabled",
+						Namespace: "default",
+						Labels: map[string]string{
+							"app": "couchbase",
+						},
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+				},
+				node: &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node1",
+					},
+					Status: corev1.NodeStatus{
+						Conditions: []corev1.NodeCondition{
+							{
+								Type:   corev1.NodeDiskPressure,
+								Status: corev1.ConditionTrue,
+							},
+						},
+					},
+				},
+				config: NewConfigBuilder().
+					WithEnableNodeConditionCheck(false).
+					WithNodeFailureConditionTypes([]string{"DiskPressure"}).
+					Build(),
+			},
+			expectedResult: denyEviction(http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, RescheduleAnnotationAddedToPodMsg),
+		},
+		{
+			testname:       "Allow eviction when node has matching taint key",
+			evictedPodName: "pod-tainted-node",
+			mockClient: &mockClient{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pod-tainted-node",
+						Namespace: "default",
+						Labels: map[string]string{
+							"app": "couchbase",
+						},
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+				},
+				node: &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node1",
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{
+								Key:    "node.example.com/pending-eviction",
+								Effect: corev1.TaintEffectNoSchedule,
+							},
+						},
+					},
+				},
+				config: NewConfigBuilder().
+					WithEnableNodeConditionCheck(true).
+					WithNodeFailureTaintKeys([]string{"node.example.com/pending-eviction"}).
+					Build(),
+			},
+			expectedResult: allowEviction(),
+		},
+		{
+			testname:       "Allow eviction with OR logic - condition matches, no taint",
+			evictedPodName: "pod-or-logic",
+			mockClient: &mockClient{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pod-or-logic",
+						Namespace: "default",
+						Labels: map[string]string{
+							"app": "couchbase",
+						},
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+				},
+				node: &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node1",
+					},
+					Status: corev1.NodeStatus{
+						Conditions: []corev1.NodeCondition{
+							{
+								Type:   corev1.NodeDiskPressure,
+								Status: corev1.ConditionTrue,
+							},
+						},
+					},
+				},
+				config: NewConfigBuilder().
+					WithEnableNodeConditionCheck(true).
+					WithNodeFailureConditionTypes([]string{"DiskPressure"}).
+					WithNodeFailureTaintKeys([]string{"some-taint-key"}).
+					Build(),
+			},
+			expectedResult: allowEviction(),
+		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.testname, func(t *testing.T) {
-			testcase.mockClient.config = NewConfigBuilder().FromEnvironment().Build()
+			if testcase.mockClient.config == nil {
+				testcase.mockClient.config = NewConfigBuilder().FromEnvironment().Build()
+			}
 			eviction := policyv1.Eviction{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testcase.evictedPodName,

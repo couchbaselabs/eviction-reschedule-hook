@@ -31,6 +31,7 @@ const (
 	FailedToRemoveRescheduleHookTrackingAnnotationMsg = "Failed to remove tracking annotation from rescheduled pods tracking resource"
 	FailedToGetPodMsg                                 = "Failed to get pod"
 	FailedToAddRescheduleHookTrackingAnnotationMsg    = "Failed to add annotation to rescheduled pods tracking resource"
+	NodeFailureEvictionAllowedMsg                     = "Node has failure condition, allowing eviction"
 )
 
 func tlsConfig(config *Config) *tls.Config {
@@ -200,6 +201,19 @@ func handleEviction(eviction policyv1.Eviction, client Client, logger *slog.Logg
 		return allowEviction()
 	}
 
+	// If the node has failure signals, allow the eviction immediately rather than orchestrating a swap rebalance
+	if client.GetConfig().enableNodeConditionCheck {
+		node, err := client.GetNode(pod.Spec.NodeName)
+		if err != nil {
+			logger.Warn("Failed to get node, continuing with normal eviction denial",
+				"node", pod.Spec.NodeName, "error", err)
+		} else if shouldAllowEvictionForNodeFailure(node, client.GetConfig()) {
+			logger.Info(NodeFailureEvictionAllowedMsg,
+				"node", pod.Spec.NodeName, "pod", pod.Name)
+			return allowEviction()
+		}
+	}
+
 	// If the pod has already been marked for rescheduling, we can exit here but deny the eviction to keep the drain command
 	// in a loop until the pod no longer exists
 	if reschedule, exists := pod.GetAnnotations()[client.GetConfig().rescheduleAnnotationKey]; exists && reschedule == client.GetConfig().rescheduleAnnotationValue {
@@ -284,6 +298,33 @@ func allowEviction() *admissionv1.AdmissionResponse {
 	return &admissionv1.AdmissionResponse{
 		Allowed: true,
 	}
+}
+
+func hasNodeFailureCondition(node *corev1.Node, failureConditionTypes []string) bool {
+	for _, condition := range node.Status.Conditions {
+		for _, failureType := range failureConditionTypes {
+			if string(condition.Type) == failureType && condition.Status == corev1.ConditionTrue {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasNodeFailureTaint(node *corev1.Node, failureTaintKeys []string) bool {
+	for _, taint := range node.Spec.Taints {
+		for _, key := range failureTaintKeys {
+			if taint.Key == key {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func shouldAllowEvictionForNodeFailure(node *corev1.Node, config *Config) bool {
+	return hasNodeFailureCondition(node, config.nodeFailureConditionTypes) ||
+		hasNodeFailureTaint(node, config.nodeFailureTaintKeys)
 }
 
 func isDryRun(eviction *policyv1.Eviction) bool {
