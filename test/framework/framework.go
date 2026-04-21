@@ -197,6 +197,11 @@ func createRescheduleHookServerClusterRole(client *kubernetes.Clientset, crName,
 				Resources: []string{"pods"},
 				Verbs:     []string{"get", "patch"},
 			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"nodes"},
+				Verbs:     []string{"get"},
+			},
 		},
 	}
 

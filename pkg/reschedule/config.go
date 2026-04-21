@@ -17,25 +17,25 @@ const (
 	DefaultCertFile                  = "/etc/webhook/certs/tls.crt"
 	DefaultKeyFile                   = "/etc/webhook/certs/tls.key"
 	DefaultTrackRescheduledPods      = "true"
-	DefaultTrackingResourceType        = tracking.ResourceTypeCouchbaseCluster
-	DefaultEnableNodeConditionCheck    = "false"
-	DefaultNodeFailureConditionTypes   = ""
-	DefaultNodeFailureTaintKeys        = ""
+	DefaultTrackingResourceType      = tracking.ResourceTypeCouchbaseCluster
+	DefaultEnableNodeConditionCheck  = "false"
+	DefaultNodeFailureConditionTypes = ""
+	DefaultNodeFailureTaintKeys      = ""
 )
 
 // Config holds the configuration for the reschedule hook
 type Config struct {
-	rescheduleAnnotationValue  string
-	rescheduleAnnotationKey    string
-	trackRescheduledPods       bool
-	podLabelSelectorKey        string
-	podLabelSelectorValue      string
-	certFile                   string
-	keyFile                    string
-	trackingResource           tracking.TrackingResource
-	enableNodeConditionCheck   bool
-	nodeFailureConditionTypes  []string
-	nodeFailureTaintKeys       []string
+	rescheduleAnnotationValue string
+	rescheduleAnnotationKey   string
+	trackRescheduledPods      bool
+	podLabelSelectorKey       string
+	podLabelSelectorValue     string
+	certFile                  string
+	keyFile                   string
+	trackingResource          tracking.TrackingResource
+	enableNodeConditionCheck  bool
+	nodeFailureConditionTypes []string
+	nodeFailureTaintKeys      []string
 }
 
 func (c *Config) ToEnvironment() map[string]string {
@@ -82,11 +82,11 @@ func NewConfigBuilder() *ConfigBuilder {
 			podLabelSelectorValue:     DefaultPodLabelSelectorValue,
 			certFile:                  DefaultCertFile,
 			keyFile:                   DefaultKeyFile,
-			trackRescheduledPods:       true,
-			trackingResource:           tracking.GetTrackingResource(DefaultTrackingResourceType),
-			enableNodeConditionCheck:   false,
-			nodeFailureConditionTypes:  []string{},
-			nodeFailureTaintKeys:       []string{},
+			trackRescheduledPods:      true,
+			trackingResource:          tracking.GetTrackingResource(DefaultTrackingResourceType),
+			enableNodeConditionCheck:  false,
+			nodeFailureConditionTypes: []string{},
+			nodeFailureTaintKeys:      []string{},
 		},
 	}
 }
