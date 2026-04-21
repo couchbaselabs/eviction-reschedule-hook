@@ -157,7 +157,7 @@ func TestEvictPodWithDifferentConfigValuesUsingNamespaceTrackingResource(t *test
 	})
 }
 
-func TestEvicPodsWithDryRunDoesNotMutateResources(t *testing.T) {
+func TestEvictPodsWithDryRunDoesNotMutateResources(t *testing.T) {
 	cluster := framework.SetupTestCluster(t, nil)
 
 	cleanup := cluster.MustCreateCouchbaseCluster(t, "couchbase-cluster", false)
@@ -183,4 +183,92 @@ func TestEvicPodsWithDryRunDoesNotMutateResources(t *testing.T) {
 		reschedule.TrackingResourceAnnotation(cbPod1.Name, cbPod1.Namespace): "true",
 		reschedule.TrackingResourceAnnotation(cbPod2.Name, cbPod2.Namespace): "true",
 	})
+}
+
+func TestEvictPodsAllowedOnNodeWithFailureCondition(t *testing.T) {
+	config := reschedule.NewConfigBuilder().
+		WithEnableNodeConditionCheck(true).
+		WithNodeFailureConditionTypes([]string{framework.MockedNodeFailureCondition}).
+		Build()
+	cluster := framework.SetupTestClusterWithNodeCleanup(t, config)
+
+	cleanup := cluster.MustCreateCouchbaseCluster(t, "couchbase-cluster", false)
+	defer cleanup()
+
+	cbPod := cluster.MustCreateCouchbasePod(t, "couchbase-1", "couchbase-cluster")
+
+	// Add the mocked failure condition to the node
+	cluster.MustAddNodeCondition(t, cbPod.Spec.NodeName, framework.MockedNodeFailureCondition)
+
+	// Validate that the eviction is allowed even though it's a couchbase pod.
+	responses := cluster.EvictPods(t, []corev1.Pod{*cbPod})
+	framework.ValidateEvictionAllowed(t, responses, cbPod.Name)
+
+	cluster.ValidatePodHasBeenEvicted(t, cbPod.Name)
+}
+
+func TestEvictPodsDeniedOnNodeWithFailureConditionWhenDisabled(t *testing.T) {
+	config := reschedule.NewConfigBuilder().
+		WithEnableNodeConditionCheck(false).
+		WithNodeFailureConditionTypes([]string{framework.MockedNodeFailureCondition}).
+		Build()
+	cluster := framework.SetupTestClusterWithNodeCleanup(t, config)
+
+	cleanup := cluster.MustCreateCouchbaseCluster(t, "couchbase-cluster", false)
+	defer cleanup()
+
+	cbPod := cluster.MustCreateCouchbasePod(t, "couchbase-1", "couchbase-cluster")
+
+	// Add the mocked failure condition to the node
+	cluster.MustAddNodeCondition(t, cbPod.Spec.NodeName, framework.MockedNodeFailureCondition)
+
+	// Validate that the eviction is denied and the reschedule annotation added to the pod.
+	responses := cluster.EvictPods(t, []corev1.Pod{*cbPod})
+	framework.ValidateEvictionDenied(t, responses, http.StatusTooManyRequests, reschedule.RescheduleAnnotationAddedToPodMsg, cbPod.Name)
+
+	cluster.ValidatePodHasAnnotation(t, cbPod.Name, reschedule.DefaultRescheduleAnnotationKey, reschedule.DefaultRescheduleAnnotationValue)
+}
+
+func TestEvictPodsAllowedOnNodeWithFailureTaint(t *testing.T) {
+	config := reschedule.NewConfigBuilder().
+		WithEnableNodeConditionCheck(true).
+		WithNodeFailureTaintKeys([]string{framework.MockedNodeFailureTaint}).
+		Build()
+	cluster := framework.SetupTestClusterWithNodeCleanup(t, config)
+
+	cleanup := cluster.MustCreateCouchbaseCluster(t, "couchbase-cluster", false)
+	defer cleanup()
+
+	cbPod := cluster.MustCreateCouchbasePod(t, "couchbase-1", "couchbase-cluster")
+
+	// Add the mocked failure taint to the node
+	cluster.MustAddNodeTaint(t, cbPod.Spec.NodeName, framework.MockedNodeFailureTaint)
+
+	// Validate that the eviction is allowed even though it's a couchbase pod.
+	responses := cluster.EvictPods(t, []corev1.Pod{*cbPod})
+	framework.ValidateEvictionAllowed(t, responses, cbPod.Name)
+
+	cluster.ValidatePodHasBeenEvicted(t, cbPod.Name)
+}
+
+func TestEvictPodsDeniedOnNodeWithFailureTaintWhenDisabled(t *testing.T) {
+	config := reschedule.NewConfigBuilder().
+		WithEnableNodeConditionCheck(false).
+		WithNodeFailureTaintKeys([]string{framework.MockedNodeFailureTaint}).
+		Build()
+	cluster := framework.SetupTestClusterWithNodeCleanup(t, config)
+
+	cleanup := cluster.MustCreateCouchbaseCluster(t, "couchbase-cluster", false)
+	defer cleanup()
+
+	cbPod := cluster.MustCreateCouchbasePod(t, "couchbase-1", "couchbase-cluster")
+
+	// Add the mocked failure taint to the node
+	cluster.MustAddNodeTaint(t, cbPod.Spec.NodeName, framework.MockedNodeFailureTaint)
+
+	// Validate that the eviction is denied and the reschedule annotation added to the pod.
+	responses := cluster.EvictPods(t, []corev1.Pod{*cbPod})
+	framework.ValidateEvictionDenied(t, responses, http.StatusTooManyRequests, reschedule.RescheduleAnnotationAddedToPodMsg, cbPod.Name)
+
+	cluster.ValidatePodHasAnnotation(t, cbPod.Name, reschedule.DefaultRescheduleAnnotationKey, reschedule.DefaultRescheduleAnnotationValue)
 }

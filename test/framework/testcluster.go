@@ -32,7 +32,14 @@ func (tc *TestCluster) GetNamespace() string {
 
 // SetupTestCluster creates a new namespace for a test and returns a TestCluster instance
 // This should be called at the start of each test. Set serverConfig to nil to use the default config.
-func SetupTestCluster(t *testing.T, serverConfig *reschedule.Config) *TestCluster {
+func SetupTestCluster(t *testing.T, config *reschedule.Config) *TestCluster {
+	return testCluster(t, config, false)
+}
+
+func SetupTestClusterWithNodeCleanup(t *testing.T, config *reschedule.Config) *TestCluster {
+	return testCluster(t, config, true)
+}
+func testCluster(t *testing.T, serverConfig *reschedule.Config, withNodeCleanup bool) *TestCluster {
 	clientConfig, err := clientConfig()
 	if err != nil {
 		t.Fatalf("Failed to create client config: %v", err)
@@ -82,6 +89,12 @@ func SetupTestCluster(t *testing.T, serverConfig *reschedule.Config) *TestCluste
 		// Delete the reschedule hook server. We need to block until this occurs as the server
 		// is recreated with the same name for each test.
 		tc.MustDeletePod(t, defaultNamespace, svcName)
+
+		// If the test involved node cleanup, make sure to remove the mocked taint and condition from all nodes to avoid impacting other tests
+		if withNodeCleanup {
+			tc.MustRemoveConditionFromAllNodes(t, MockedNodeFailureCondition)
+			tc.MustRemoveTaintFromAllNodes(t, MockedNodeFailureTaint)
+		}
 
 		// Delete the namespace. This might take a while, but we don't need to block until it occurs.
 		if err := client.CoreV1().Namespaces().Delete(context.TODO(), tc.namespace, metav1.DeleteOptions{}); err != nil {
